@@ -9,4 +9,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add tus 1.0.0 resumable upload server handler and disk store with creation, termination, expiration and checksum extensions.
 - Initial project structure from the factory utility template.
