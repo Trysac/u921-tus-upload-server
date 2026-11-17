@@ -1,30 +1,10 @@
 # Architecture
 
-## Purpose
+`tus-upload-server` implements the [tus 1.0.0 Resumable Upload Protocol](https://tus.io/protocols/resumable-upload) as a clean, embeddable `http.Handler` in Go standard library.
 
-`github.com/Trysac/u921-tus-upload-server` is a small, dependency-free Go library: Resumable upload server implementing the tus 1.0.0 protocol with creation, termination, expiration and checksum extensions on disk
+## Core Principles
 
-## Shape
-
-```text
-caller code --> package tusuploadserver (repository root)
-                    |
-                    +-- pure functions, no I/O, no global mutable state
-                    +-- internal/ (optional private helpers)
-```
-
-- **Public API**: every exported identifier of the root package. Unexported identifiers and
-  `internal/` packages may change without a major version.
-- **Errors**: invalid input returns an error; exported sentinel errors (such as `ErrBlank`) let
-  callers branch with `errors.Is`. The library never panics on input, prints or exits.
-- **Side effects**: none. If a feature needs I/O, accept an interface (`io.Reader` or a small
-  custom one) instead of opening resources, and record the choice in an ADR.
-
-## Quality contract
-
-`scripts/check` is the single definition of the gates; `fabrica.json` tells the factory and CI
-how to run it. See [TESTING.md](TESTING.md).
-
-## Decisions
-
-Architecture decisions are recorded in [decisions/](decisions/) as numbered ADRs.
+1. **Data Retention on Interruption**: During streaming PATCH uploads, data received prior to a network interruption or client disconnect is flushed, synced to disk, and the offset is committed to metadata. Clients query `HEAD` on reconnect and resume directly from `Upload-Offset`.
+2. **Atomic Checksums**: When `Upload-Checksum` is supplied, chunks are streamed to a temporary file, their SHA-1 digest is verified, and only committed to the store upon match (HTTP 460 on mismatch, leaving offset intact).
+3. **Concurrency & Locking**: Per-upload locks guard against race conditions and concurrent writes, returning HTTP 423 (Locked) to secondary concurrent PATCH requests.
+4. **Disk Storage (`DirStore`)**: Writes raw chunks to `<root>/<id>.bin` at the given offset and writes `<root>/<id>.json` metadata via atomic temporary files and rename after fsync.

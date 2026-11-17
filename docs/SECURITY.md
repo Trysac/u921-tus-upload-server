@@ -1,23 +1,15 @@
-# Security notes
+# Security Model
 
-## Threat model
+## Defended Threats
 
-`github.com/Trysac/u921-tus-upload-server` is a pure library without I/O. The main risks are:
+- **Path Traversal**: Upload IDs are strictly validated against the regex `^[A-Za-z0-9_-]{1,64}$` before interacting with the file system.
+- **Metadata Bloat**: `Upload-Metadata` headers are limited to 4 KiB with unique keys to prevent header-based denial of service.
+- **Unbounded Streaming**: `MaxSize` configuration is enforced, and offsets are validated against `Upload-Length` to prevent disk exhaustion.
+- **Privacy**: `OnEvent` callbacks expose only `Kind`, `ID`, and `Offset`. Sensitive metadata values are never included in event logs or propagation.
+- **Concurrent Corruption**: Per-upload locking prevents race conditions on writes; concurrent PATCH attempts return HTTP 423 (Locked).
 
-- **Supply chain**: a compromised dependency or CI action. Mitigation: standard library only,
-  `go.sum` verification, `govulncheck` in the local gates, Dependabot weekly updates, actions
-  pinned by commit SHA, minimal workflow permissions.
-- **Leaked secrets**: tokens committed by mistake. Mitigation: `gitleaks` runs in the local gates
-  and in CI; `.env` files are git-ignored.
-- **Insecure code**: disabled TLS verification, weak crypto, command injection. Mitigation: a
-  `security` gate (gosec, high severity fails, `#nosec` ignored); fix the code instead of silencing
-  it.
-- **Untrusted input**: callers may pass hostile strings. Mitigation: validate input and return
-  explicit errors; never use `unsafe` or `os/exec` with untrusted data.
+## Not Defended
 
-## Publishing
-
-Releases are git tags served through the Go module proxy and checksum database. No registry token
-is stored in the repository.
-
-To report a vulnerability, see [SECURITY.md](../SECURITY.md).
+- **Storage Quotas**: Does not enforce global storage limits, only per-upload `MaxSize`.
+- **Authentication/Authorization**: No built-in access control; must be implemented as a wrapper handler.
+- **Network Security**: Relies on host environment for TLS/HTTPS termination.
